@@ -1,0 +1,14 @@
+/* styles.css */
+.savechat-blurred-title {
+    filter: blur(4px);
+    /* Adjust blur amount as needed */
+    transition: filter 0.1s ease-out;
+    /* Smooth transition for blur/unblur */
+}
+
+/*
+  The JavaScript will add/remove the .savechat-blurred-title class.
+  When the class is present, it's blurred.
+  When the mouse enters, JS removes the class (unblur).
+  When the mouse leaves, JS adds the class back (blur).
+*/

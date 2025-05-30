@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "safeChat",
+  "version": "0.1.0",
+  "description": "Blurs conversation titles, revealing them on hover. Click icon for a message.",
+  "permissions": ["scripting", "activeTab"],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://chat.openai.com/*",
+        "*://chatgpt.com/*",
+        "*://gemini.google.com/*",
+        "*://claude.ai/*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/safeChat.png",
+      "48": "icons/safeChat.png",
+      "128": "icons/safeChat.png"
+    }
+  },
+  "icons": {
+    "16": "icons/safeChat.png",
+    "48": "icons/safeChat.png",
+    "128": "icons/safeChat.png"
+  }
+}
