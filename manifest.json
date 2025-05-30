@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "safeChat",
+  "name": "ChatBlurUI",
   "version": "0.1.0",
   "description": "Blurs conversation titles, revealing them on hover. Click icon for a message.",
   "permissions": ["scripting", "activeTab"],
@@ -19,14 +19,12 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/safeChat.png",
-      "48": "icons/safeChat.png",
-      "128": "icons/safeChat.png"
+      "16": "icons/ChatBlurUI.png",
+      "48": "icons/ChatBlurUI.png"
     }
   },
   "icons": {
-    "16": "icons/safeChat.png",
-    "48": "icons/safeChat.png",
-    "128": "icons/safeChat.png"
+    "16": "icons/ChatBlurUI.png",
+    "48": "icons/ChatBlurUI.png"
   }
 }

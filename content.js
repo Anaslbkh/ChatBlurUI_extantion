@@ -2,28 +2,20 @@
 console.log("saveChat content script loaded.");
 
 const BLUR_CLASS = "savechat-blurred-title";
+const PROCESSED_ATTR = "data-savechat-processed"; // Custom attribute to mark processed elements
 
-// --- !!! IMPORTANT: UPDATE THESE SELECTORS !!! ---
-// You MUST inspect each website to find the correct selectors.
-// These are placeholders and WILL LIKELY NOT WORK out-of-the-box.
-//
-// How to find selectors:
-// 1. Go to the website (e.g., chat.openai.com).
-// 2. Open Developer Tools (F12 or Right-click -> Inspect).
-// 3. Use the element picker (often an icon of a square with a pointer).
-// 4. Click on a conversation title in the sidebar.
-// 5. Examine the HTML. Find a class, tag, or attribute combination unique to the titles.
-//    - `titleElementSelector`: Should target the text element of the title or its immediate clickable parent.
-//    - `sidebarContainerSelector`: Should target a stable parent element containing ALL chat history links.
-// ---
+/**
+ * Injects the CSS style for the blur effect into the document head.
+ * Ensures the style is only added once.
+ */
 function injectBlurStyle() {
   if (!document.getElementById("savechat-blur-style")) {
     const style = document.createElement("style");
     style.id = "savechat-blur-style";
     style.textContent = `
       .${BLUR_CLASS} {
-        filter: blur(6px);
-        transition: filter 0.2s;
+        filter: blur(6px); /* Adjust blur amount as needed */
+        transition: filter 0.2s ease-out; /* Smooth transition for blur/unblur */
         cursor: pointer;
       }
     `;
@@ -31,9 +23,22 @@ function injectBlurStyle() {
   }
 }
 
+/**
+ * Returns platform-specific CSS selectors for chat titles and their sidebar container.
+ * These selectors are CRITICAL and must be accurate for the extension to work.
+ *
+ * How to find selectors:
+ * 1. Go to the target website (e.g., chat.openai.com).
+ * 2. Open Developer Tools (F12 or Right-click -> Inspect).
+ * 3. Use the element picker tool.
+ * 4. Click on a conversation title in the sidebar.
+ * 5. Examine the HTML structure. Look for stable classes, IDs, or tag hierarchies
+ *    that reliably select ALL conversation titles and their common parent.
+ *
+ * @returns {object|null} An object with `titleElementSelector` and `sidebarContainerSelector`, or null if platform is not recognized.
+ */
 function getPlatformSelectors() {
   const hostname = window.location.hostname;
-  const pathname = window.location.pathname;
 
   if (
     hostname.includes("chat.openai.com") ||
@@ -41,98 +46,128 @@ function getPlatformSelectors() {
   ) {
     // ChatGPT (chat.openai.com and chatgpt.com)
     return {
-      titleElementSelector: "#history a > div",
+      // Updated selector: targets the div inside the <a> that contains the title text.
+      titleElementSelector:
+        "#history a > div.flex.flex-col.gap-2, #history a > div",
       sidebarContainerSelector: "#history",
+      // For event delegation, always find the parent <a>
+      eventTitleAncestor: "a",
     };
   } else if (hostname.includes("gemini.google.com")) {
     // Gemini (robust selectors)
     return {
       titleElementSelector: "div.conversation-title",
       sidebarContainerSelector: "div.sidenav-with-history-container",
+      eventTitleAncestor: "div.conversation-title",
     };
   } else if (hostname.includes("claude.ai")) {
     // Claude
     return {
-      titleElementSelector: "nav ul li a",
+      // Selector matches both <a> and its children for event delegation
+      titleElementSelector: "nav ul li a, nav ul li a *",
       sidebarContainerSelector: "nav ul",
+      eventTitleAncestor: "a",
     };
   }
   return null; // Unknown platform
 }
 
-function applyBlurToTitle(element) {
-  element.classList.add(BLUR_CLASS);
-}
-
-function removeBlurFromTitle(element) {
-  element.classList.remove(BLUR_CLASS);
-}
-
-function processTitles() {
+/**
+ * Applies the blur class to all chat titles found that haven't been processed yet.
+ * Marks processed elements with a custom attribute.
+ */
+function applyInitialBlurAndMark() {
   const selectors = getPlatformSelectors();
   if (!selectors || !selectors.titleElementSelector) {
     return;
   }
 
-  const titles = document.querySelectorAll(selectors.titleElementSelector);
-
-  titles.forEach((title) => {
-    // Remove previous listeners by cloning the node (removes all listeners)
-    const newTitle = title.cloneNode(true);
-    title.replaceWith(newTitle);
-    // Always apply blur
-    applyBlurToTitle(newTitle);
-    // Add listeners
-    newTitle.addEventListener(
-      "mouseenter",
-      () => {
-        removeBlurFromTitle(newTitle);
-      },
-      { once: true }
+  // Only select the actual title elements (not their children)
+  let allTitleCandidates;
+  if (selectors.eventTitleAncestor === "a") {
+    // For Claude and ChatGPT, select all <a> elements
+    allTitleCandidates = document.querySelectorAll(
+      selectors.sidebarContainerSelector + " a"
     );
-    // Only add the blur back if mouse leaves, but do not re-add if already unblurred
-    newTitle.addEventListener("mouseleave", () => {
-      if (!newTitle.classList.contains(BLUR_CLASS)) {
-        applyBlurToTitle(newTitle);
-        // Re-enable the mouseenter for next hover
-        newTitle.addEventListener(
-          "mouseenter",
-          () => {
-            removeBlurFromTitle(newTitle);
-          },
-          { once: true }
-        );
-      }
-    });
+  } else {
+    // For Gemini, select the title element directly
+    allTitleCandidates = document.querySelectorAll(
+      selectors.titleElementSelector
+    );
+  }
+
+  allTitleCandidates.forEach((titleElement) => {
+    // Only process if not already marked
+    if (!titleElement.hasAttribute(PROCESSED_ATTR)) {
+      titleElement.classList.add(BLUR_CLASS);
+      titleElement.setAttribute(PROCESSED_ATTR, "true");
+    }
   });
 }
 
-// --- Main Execution ---
-injectBlurStyle();
-
-// Initial run - wait a bit for the page to load, especially for SPAs
-// Using a small timeout as SPA hydration can take a moment.
-// A more robust solution for SPAs might involve waiting for a specific element to appear.
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => {
-    setTimeout(processTitles, 1000); // Further delay for dynamic content
-    setupObserver();
-  });
-} else {
-  setTimeout(processTitles, 1000); // Content already loaded, but give a sec for JS frameworks
-  setupObserver();
-}
-
-function setupObserver() {
+/**
+ * Sets up event delegation on the sidebar container for efficient hover effects.
+ * A single pair of listeners handles all chat titles.
+ */
+function setupEventDelegation() {
   const selectors = getPlatformSelectors();
-  console.log(selectors.titleElementSelector);
-  console.log(selectors.sidebarContainerSelector);
   if (!selectors || !selectors.sidebarContainerSelector) {
-    console.log(
-      "saveChat: Cannot set up MutationObserver, sidebarContainerSelector missing."
+    console.warn(
+      "saveChat: Cannot set up event delegation, sidebarContainerSelector missing."
     );
-    // Fallback to periodic checks if observer can't be set up (less efficient)
-    setInterval(processTitles, 3000);
+    return;
+  }
+
+  const sidebarContainer = document.querySelector(
+    selectors.sidebarContainerSelector
+  );
+
+  if (!sidebarContainer) {
+    console.warn(
+      `saveChat: Sidebar container ('${selectors.sidebarContainerSelector}') not found for event delegation. Retrying...`
+    );
+    setTimeout(setupEventDelegation, 1000);
+    return;
+  }
+
+  sidebarContainer.addEventListener("mouseover", (event) => {
+    // Always find the ancestor (e.g., <a>) for the event
+    const hoveredTitle = event.target.closest(
+      selectors.sidebarContainerSelector + " " + selectors.eventTitleAncestor
+    );
+    if (hoveredTitle && hoveredTitle.hasAttribute(PROCESSED_ATTR)) {
+      hoveredTitle.classList.remove(BLUR_CLASS);
+    }
+  });
+
+  sidebarContainer.addEventListener("mouseout", (event) => {
+    const exitedTitle = event.target.closest(
+      selectors.sidebarContainerSelector + " " + selectors.eventTitleAncestor
+    );
+    if (
+      exitedTitle &&
+      exitedTitle.hasAttribute(PROCESSED_ATTR) &&
+      !exitedTitle.contains(event.relatedTarget)
+    ) {
+      exitedTitle.classList.add(BLUR_CLASS);
+    }
+  });
+
+  console.log(
+    `saveChat: Event delegation setup on ${selectors.sidebarContainerSelector}`
+  );
+}
+
+/**
+ * Sets up a MutationObserver to watch for dynamically added chat titles in the sidebar.
+ */
+function setupMutationObserver() {
+  const selectors = getPlatformSelectors();
+  if (!selectors || !selectors.sidebarContainerSelector) {
+    console.warn(
+      "saveChat: Cannot set up MutationObserver, sidebarContainerSelector missing. Falling back to periodic checks."
+    );
+    setInterval(applyInitialBlurAndMark, 3000); // Periodically check for new titles
     return;
   }
 
@@ -140,33 +175,68 @@ function setupObserver() {
 
   if (targetNode) {
     const observerConfig = { childList: true, subtree: true };
-    const observer = new MutationObserver((mutationsList, observer) => {
-      let newNodesPotentiallyAdded = false;
+    const observer = new MutationObserver((mutationsList) => {
+      let shouldProcess = false;
       for (const mutation of mutationsList) {
+        // Check if new nodes were added
         if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
-          // A more refined check could be to see if addedNodes or their children
-          // match the titleElementSelector or contain elements that do.
-          newNodesPotentiallyAdded = true;
-          break;
+          // Optimize: Check if any added node (or its children) looks like a chat title
+          for (const node of mutation.addedNodes) {
+            if (
+              node.nodeType === 1 &&
+              (node.matches(selectors.titleElementSelector) ||
+                node.querySelector(selectors.titleElementSelector))
+            ) {
+              shouldProcess = true;
+              break; // Found a relevant node, no need to check further mutations
+            }
+          }
         }
+        if (shouldProcess) break; // If we decided to process, break from outer loop
       }
-      if (newNodesPotentiallyAdded) {
-        // console.log("saveChat: DOM changed, re-processing titles.");
-        // Use a small timeout to allow the DOM to fully update after mutations
-        setTimeout(processTitles, 200);
+
+      if (shouldProcess) {
+        // console.log("saveChat: DOM changed, potentially new titles added. Re-applying blur.");
+        // Use a small timeout to debounce rapid changes and allow the DOM to fully update
+        setTimeout(applyInitialBlurAndMark, 100);
       }
     });
     observer.observe(targetNode, observerConfig);
     console.log(
-      `saveChat: Observing ${selectors.sidebarContainerSelector} for changes.`
+      `saveChat: Observing ${selectors.sidebarContainerSelector} for new titles.`
     );
   } else {
     console.warn(
-      `saveChat: Could not find sidebar container ('${selectors.sidebarContainerSelector}') to observe. Titles might not blur on dynamic load.`
+      `saveChat: Could not find sidebar container ('${selectors.sidebarContainerSelector}') for MutationObserver. Retrying...`
     );
-    // Fallback: If the container isn't found initially, try to find it again later,
-    // or just rely on periodic checks.
-    setTimeout(setupObserver, 3000); // Try again in 3 seconds
-    setInterval(processTitles, 5000); // And also run periodic checks
+    // If observer target isn't found initially, try again later.
+    setTimeout(setupMutationObserver, 3000);
+    // Also, fall back to periodic checks in case observer cannot be set up at all
+    setInterval(applyInitialBlurAndMark, 5000);
   }
+}
+
+// --- Main Execution ---
+
+// Inject the CSS rule once when the script loads.
+injectBlurStyle();
+
+// Initial setup: Apply blur to existing titles, set up hover listeners, and start observing.
+// We use a small delay to ensure the Single Page Application (SPA) has time to render its initial content.
+// The exact delay might need fine-tuning, but 200-500ms is usually a good starting point.
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(() => {
+      applyInitialBlurAndMark(); // Apply blur to titles already present
+      setupEventDelegation(); // Set up efficient hover listeners on the container
+      setupMutationObserver(); // Start watching for new titles
+    }, 500); // Delay for DOMContentLoaded
+  });
+} else {
+  // If DOM is already ready (script loaded after DOMContentLoaded), run immediately with a small delay
+  setTimeout(() => {
+    applyInitialBlurAndMark();
+    setupEventDelegation();
+    setupMutationObserver();
+  }, 200); // Shorter delay if DOM is already ready
 }
