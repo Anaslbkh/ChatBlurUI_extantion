@@ -1,17 +1,17 @@
 // content.js
-console.log("saveChat content script loaded.");
+console.log("ChatBlurUI content script loaded.");
 
-const BLUR_CLASS = "savechat-blurred-title";
-const PROCESSED_ATTR = "data-savechat-processed"; // Custom attribute to mark processed elements
+const BLUR_CLASS = "ChatBlurUI-blurred-title";
+const PROCESSED_ATTR = "data-ChatBlurUI-processed"; // Custom attribute to mark processed elements
 
 /**
  * Injects the CSS style for the blur effect into the document head.
  * Ensures the style is only added once.
  */
 function injectBlurStyle() {
-  if (!document.getElementById("savechat-blur-style")) {
+  if (!document.getElementById("ChatBlurUI-blur-style")) {
     const style = document.createElement("style");
-    style.id = "savechat-blur-style";
+    style.id = "ChatBlurUI-blur-style";
     style.textContent = `
       .${BLUR_CLASS} {
         filter: blur(6px); /* Adjust blur amount as needed */
@@ -44,6 +44,7 @@ function getPlatformSelectors() {
     hostname.includes("chat.openai.com") ||
     hostname.includes("chatgpt.com")
   ) {
+    console.log("Detected ChatGPT platform.");
     // ChatGPT (chat.openai.com and chatgpt.com)
     return {
       // Updated selector: targets the div inside the <a> that contains the title text.
@@ -54,6 +55,7 @@ function getPlatformSelectors() {
       eventTitleAncestor: "a",
     };
   } else if (hostname.includes("gemini.google.com")) {
+    console.log("Detected Gemini platform.");
     // Gemini (robust selectors)
     return {
       titleElementSelector: "div.conversation-title",
@@ -61,6 +63,7 @@ function getPlatformSelectors() {
       eventTitleAncestor: "div.conversation-title",
     };
   } else if (hostname.includes("claude.ai")) {
+    console.log("Detected Claude AI platform.");
     // Claude
     return {
       // Selector matches both <a> and its children for event delegation
@@ -110,10 +113,12 @@ function applyInitialBlurAndMark() {
  * A single pair of listeners handles all chat titles.
  */
 function setupEventDelegation() {
+  console.log("Detected platform:", window.location.hostname);
   const selectors = getPlatformSelectors();
+  console.log("Using selectors:", selectors);
   if (!selectors || !selectors.sidebarContainerSelector) {
     console.warn(
-      "saveChat: Cannot set up event delegation, sidebarContainerSelector missing."
+      "ChatBlurUI: Cannot set up event delegation, sidebarContainerSelector missing."
     );
     return;
   }
@@ -124,7 +129,7 @@ function setupEventDelegation() {
 
   if (!sidebarContainer) {
     console.warn(
-      `saveChat: Sidebar container ('${selectors.sidebarContainerSelector}') not found for event delegation. Retrying...`
+      `ChatBlurUI: Sidebar container ('${selectors.sidebarContainerSelector}') not found for event delegation. Retrying...`
     );
     setTimeout(setupEventDelegation, 1000);
     return;
@@ -154,7 +159,7 @@ function setupEventDelegation() {
   });
 
   console.log(
-    `saveChat: Event delegation setup on ${selectors.sidebarContainerSelector}`
+    `ChatBlurUI: Event delegation setup on ${selectors.sidebarContainerSelector}`
   );
 }
 
@@ -165,7 +170,7 @@ function setupMutationObserver() {
   const selectors = getPlatformSelectors();
   if (!selectors || !selectors.sidebarContainerSelector) {
     console.warn(
-      "saveChat: Cannot set up MutationObserver, sidebarContainerSelector missing. Falling back to periodic checks."
+      "ChatBlurUI: Cannot set up MutationObserver, sidebarContainerSelector missing. Falling back to periodic checks."
     );
     setInterval(applyInitialBlurAndMark, 3000); // Periodically check for new titles
     return;
@@ -196,18 +201,18 @@ function setupMutationObserver() {
       }
 
       if (shouldProcess) {
-        // console.log("saveChat: DOM changed, potentially new titles added. Re-applying blur.");
+        // console.log("ChatBlurUI: DOM changed, potentially new titles added. Re-applying blur.");
         // Use a small timeout to debounce rapid changes and allow the DOM to fully update
         setTimeout(applyInitialBlurAndMark, 100);
       }
     });
     observer.observe(targetNode, observerConfig);
     console.log(
-      `saveChat: Observing ${selectors.sidebarContainerSelector} for new titles.`
+      `ChatBlurUI: Observing ${selectors.sidebarContainerSelector} for new titles.`
     );
   } else {
     console.warn(
-      `saveChat: Could not find sidebar container ('${selectors.sidebarContainerSelector}') for MutationObserver. Retrying...`
+      `ChatBlurUI: Could not find sidebar container ('${selectors.sidebarContainerSelector}') for MutationObserver. Retrying...`
     );
     // If observer target isn't found initially, try again later.
     setTimeout(setupMutationObserver, 3000);
