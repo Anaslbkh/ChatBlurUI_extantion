@@ -3,7 +3,7 @@
   "name": "ChatBlurUI",
   "version": "0.1.0",
   "description": "Blurs conversation titles, revealing them on hover. Click icon for a message.",
-  "permissions": ["scripting", "activeTab"],
+  "permissions": [],
   "content_scripts": [
     {
       "matches": [
